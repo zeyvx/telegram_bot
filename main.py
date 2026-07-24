@@ -1,5 +1,6 @@
 from os import getenv
 from dotenv import load_dotenv
+load_dotenv()                              # ← теперь до импорта routers
 from aiogram import Bot, Dispatcher
 import asyncio
 from Handlers.routers import router
