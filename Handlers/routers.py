@@ -84,7 +84,16 @@ async def invalid_request(message:Message, state: FSMContext):
 @router.message(SendRequest.file, F.document)
 async def get_file(message: Message, state: FSMContext):
     await state.update_data(file=message.document.file_id)
+    await _save_request(message, state)
 
+
+@router.message(SendRequest.file, F.photo)
+async def get_photo(message: Message, state: FSMContext):
+    await state.update_data(file=message.photo[-1].file_id)
+    await _save_request(message, state)
+
+
+async def _save_request(message: Message, state: FSMContext):
     data = await state.get_data()
 
     await message.bot.delete_message(
@@ -126,6 +135,13 @@ async def skip_file(callback: CallbackQuery, state: FSMContext):
     )
 
     await callback.answer()
+
+
+@router.message(SendRequest.file)
+async def get_file_invalid(message: Message, state: FSMContext):
+    await message.answer(
+        "Пожалуйста, прикрепите файл или фото, либо нажмите 'Пропустить' ⬆️"
+    )
 
 #Посмотреть свои заявки
 
@@ -225,5 +241,5 @@ async def faq(callback: CallbackQuery):
 
 @router.callback_query(F.data == 'call_operator')
 async def operator(callback: CallbackQuery):
-    await callback.message.answer("Номер оператора: +998 99 057 56 71")
+    await callback.message.answer("Номер оператора: +998900506261")
     await callback.answer()
