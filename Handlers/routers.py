@@ -12,10 +12,12 @@ router = Router()
 @router.message(CommandStart())
 async def start(message: Message):
     user = await get_user(message.from_user.id)
+
     if user:
         await message.answer(
         "Добро пожаловать в главное меню!\n\n"
         "Выберите нужное действие:" ,reply_markup=kb.main_keyboard())
+
     else:
         await message.answer(
     "Здравствуйте! 👋\n\n"
@@ -30,7 +32,14 @@ async def save_user(message: Message):
     
     phone = message.contact.phone_number
 
-    await add_user(message.from_user.id, phone)
+    success = await add_user(message.from_user.id, phone)
+    if not success:
+        await message.answer(
+            "⚠️ Этот номер телефона уже зарегистрирован в системе.\n"
+            "Если это ошибка — свяжитесь с оператором."
+        )
+        return
+    
     await message.answer(
     "✅ Вы успешно зарегистрированы!\n\n"
     "Для начала работы перезапустите бота, отправив команду /start.", reply_markup=ReplyKeyboardRemove())

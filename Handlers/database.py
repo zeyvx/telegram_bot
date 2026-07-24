@@ -24,10 +24,14 @@ async def init_db():
         await conn.commit()
 
 async def add_user(user_id, phone):
-    async with aiosqlite.connect("database.db") as conn:
-        await conn.execute(
-            "INSERT INTO users(user_id, phone) VALUES (?, ?)", (user_id, phone))
-        await conn.commit()
+    try:
+        async with aiosqlite.connect("database.db") as conn:
+            await conn.execute(
+                "INSERT INTO users(user_id, phone) VALUES (?, ?)", (user_id, phone))
+            await conn.commit()
+            return True
+    except aiosqlite.IntegrityError:
+        return False
 
 async def get_user(user_id):
     async with aiosqlite.connect('database.db') as conn:
