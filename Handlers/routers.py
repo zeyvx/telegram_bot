@@ -212,7 +212,7 @@ async def my_requests(callback: CallbackQuery):
 async def request_page(callback: CallbackQuery):
 
     page = int(
-        callback.data.split(":")[1]
+        int(callback.data.split(":")[1])
     )
 
     user_id = callback.from_user.id
