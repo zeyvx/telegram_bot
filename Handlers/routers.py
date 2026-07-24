@@ -6,6 +6,9 @@ from Handlers.Forms.request_send import SendRequest
 import Handlers.keyboards as kb
 from Handlers.database import get_user, add_user, add_request, get_my_requests
 from aiogram.types import ReplyKeyboardRemove
+from os import getenv
+
+OPERATOR_PHONE = getenv("OPERATOR_PHONE")
 
 router = Router()
 
@@ -250,5 +253,5 @@ async def faq(callback: CallbackQuery):
 
 @router.callback_query(F.data == 'call_operator')
 async def operator(callback: CallbackQuery):
-    await callback.message.answer("Номер оператора: +998900506261")
+    await callback.message.answer(f"Номер оператора: {OPERATOR_PHONE}")
     await callback.answer()
