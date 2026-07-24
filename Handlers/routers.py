@@ -56,7 +56,7 @@ async def choose_category(callback: CallbackQuery, state: FSMContext):
 
     await callback.answer()
 
-@router.message(SendRequest.request)
+@router.message(SendRequest.request, F.text)
 async def get_request(message: Message, state: FSMContext):
     await state.update_data(request=message.text)
 
@@ -76,6 +76,10 @@ async def get_request(message: Message, state: FSMContext):
 
     await state.update_data(file_message_id=bot_message.message_id)
 
+@router.message(SendRequest.request)
+async def invalid_request(message:Message, state: FSMContext):
+    await message.answer("Пожалуйста, опишите проблему текстом")
+    
 
 @router.message(SendRequest.file, F.document)
 async def get_file(message: Message, state: FSMContext):
@@ -221,5 +225,5 @@ async def faq(callback: CallbackQuery):
 
 @router.callback_query(F.data == 'call_operator')
 async def operator(callback: CallbackQuery):
-    await callback.message.answer("Номер оператора: +998 90 050 62 61")
+    await callback.message.answer("Номер оператора: +998 99 057 56 71")
     await callback.answer()
