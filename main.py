@@ -1,21 +1,23 @@
-from os import getenv
-from dotenv import load_dotenv
-load_dotenv()
 from aiogram import Bot, Dispatcher
 import asyncio
-from handlers.routers import router
-from handlers.database import init_db
-
-load_dotenv()
-BOT_TOKEN = getenv("BOT_TOKEN")
+from database.database import init_db
+import aiosqlite
+from config import BOT_TOKEN
+from handlers.user.start import router as start_router
+from handlers.user.requests import router as requests_router
 
 dp = Dispatcher()
-dp.include_router(router)
+dp.include_router(start_router)
+dp.include_router(requests_router)
 
 async def main():
+    async with aiosqlite.connect("database.db") as db:
+        await init_db(db)
+
     bot = Bot(token=BOT_TOKEN)
-    await init_db()
+
     print("Бот запустился...")
+
     await dp.start_polling(bot)
 
 if __name__ == '__main__':
