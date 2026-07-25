@@ -25,7 +25,7 @@ Telegram-бот для приёма и обработки обращений п�
 1. **Клонируйте репозиторий:**
 
    ```bash
-   git clone https://github.com/zeyvx/telegram_bot.git
+   git clone https://github.com/zeyvx/telegram_support_bot.git
    cd telegram_bot
    ```
 
@@ -57,7 +57,7 @@ telegram_bot/
 ├── main.py                    # Точка входа, запуск бота
 ├── requirements.txt            # Зависимости проекта
 ├── .env                        # Переменные окружения (не хранится в репозитории)
-└── Handlers/
+└── handlers/
     ├── routers.py               # Хендлеры сообщений и callback-запросов
     ├── keyboards.py              # Клавиатуры (inline и reply)
     ├── database.py                # Работа с базой данных (SQLite)
