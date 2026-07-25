@@ -1,53 +1,11 @@
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
-from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
-from handlers.Forms.request_send import SendRequest
-import handlers.keyboards as kb
-from handlers.database.database import get_user, add_user, add_request, get_my_requests
-from aiogram.types import ReplyKeyboardRemove
-from os import getenv
-
-OPERATOR_PHONE = getenv("OPERATOR_PHONE")
+from states.request_send import SendRequest
+import keyboards.user as kb
+from database.dao import users_dao
 
 router = Router()
-
-@router.message(CommandStart())
-async def start(message: Message):
-    user = await get_user(message.from_user.id)
-
-    if user:
-        await message.answer(
-        "Добро пожаловать в главное меню!\n\n"
-        "Выберите нужное действие:" ,reply_markup=kb.main_keyboard())
-
-    else:
-        await message.answer(
-    "Здравствуйте! 👋\n\n"
-    "Добро пожаловать в службу поддержки.\n"
-    "Для начала работы отправьте свой контакт, нажав кнопку ниже.", reply_markup=kb.send_contact())
-
-@router.message(F.contact)
-async def save_user(message: Message):
-    if message.contact.user_id != message.from_user.id:
-        await message.answer("Пожалуйста отправьте свой номер")
-        return
-    
-    phone = message.contact.phone_number
-
-    success = await add_user(message.from_user.id, phone)
-    if not success:
-        await message.answer(
-            "⚠️ Этот номер телефона уже зарегистрирован в системе.\n"
-            "Если это ошибка — свяжитесь с оператором."
-        )
-        return
-    
-    await message.answer(
-    "✅ Вы успешно зарегистрированы!\n\n"
-    "Для начала работы перезапустите бота, отправив команду /start.", reply_markup=ReplyKeyboardRemove())
-
-#Отправить заявку
 
 @router.callback_query(F.data == 'send_request')
 async def send_request(callback: CallbackQuery, state: FSMContext):
@@ -113,7 +71,7 @@ async def _save_request(message: Message, state: FSMContext):
         message_id=data['file_message_id']
     )
 
-    await add_request(
+    await users_dao.add_request(
         message.from_user.id,
         category=data['category'],
         request=data['request'],
@@ -132,7 +90,7 @@ async def _save_request(message: Message, state: FSMContext):
 async def skip_file(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
 
-    await add_request(
+    await users_dao.add_request(
         user_id=callback.from_user.id,
         category=data["category"],
         request=data["request"],
@@ -179,13 +137,12 @@ def format_text(request):
         f"📌 Статус: {request[5]}"
     )
 
-
 @router.callback_query(F.data == 'my_requests')
 async def my_requests(callback: CallbackQuery):
 
     user_id = callback.from_user.id
 
-    requests = await get_my_requests(user_id)
+    requests = await users_dao.get_my_requests(user_id)
 
     if not requests:
         await callback.message.edit_text(
@@ -220,7 +177,7 @@ async def request_page(callback: CallbackQuery):
 
     user_id = callback.from_user.id
 
-    requests = await get_my_requests(user_id)
+    requests = await users_dao.get_my_requests(user_id)
 
     if not requests:
         await callback.answer(
@@ -244,14 +201,4 @@ async def request_page(callback: CallbackQuery):
         )
     )
 
-    await callback.answer()
-
-@router.callback_query(F.data == 'faq')
-async def faq(callback: CallbackQuery):
-    await callback.message.answer("FAQ")
-    await callback.answer()
-
-@router.callback_query(F.data == 'call_operator')
-async def operator(callback: CallbackQuery):
-    await callback.message.answer(f"Номер оператора: {OPERATOR_PHONE}")
     await callback.answer()

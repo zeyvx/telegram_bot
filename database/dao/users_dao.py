@@ -1,35 +1,13 @@
 import aiosqlite
 
-async def init_db():
-    async with aiosqlite.connect('database.db') as conn:
-        await conn.execute("PRAGMA foreign_keys = ON")
-        await conn.execute("""
-    CREATE TABLE IF NOT EXISTS users(
-                           user_id INTEGER PRIMARY KEY,
-                           phone TEXT UNIQUE
-                           )
-                           """)
-        
-        await conn.execute("""
-    CREATE TABLE IF NOT EXISTS requests(
-                           id INTEGER PRIMARY KEY AUTOINCREMENT,
-                           user_id INTEGER NOT NULL,
-                           category TEXT NOT NULL,
-                           request TEXT NOT NULL,
-                           file_id TEXT,
-                           status TEXT DEFAULT 'Новая',
-                           FOREIGN KEY(user_id) REFERENCES users(user_id)
-                           )
-""")
-        await conn.commit()
-
 async def add_user(user_id, phone):
     try:
-        async with aiosqlite.connect("database.db") as conn:
+        async with aiosqlite.connect('database.db') as conn:
             await conn.execute(
                 "INSERT INTO users(user_id, phone) VALUES (?, ?)", (user_id, phone))
             await conn.commit()
             return True
+    
     except aiosqlite.IntegrityError:
         return False
 
