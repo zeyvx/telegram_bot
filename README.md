@@ -26,7 +26,7 @@ Telegram-бот для приёма и обработки обращений п�
 
    ```bash
    git clone https://github.com/zeyvx/telegram_support_bot.git
-   cd telegram_bot
+   cd telegram_support_bot
    ```
 
 2. **Установите зависимости:**
