@@ -3,8 +3,8 @@ from dotenv import load_dotenv
 load_dotenv()
 from aiogram import Bot, Dispatcher
 import asyncio
-from Handlers.routers import router
-from Handlers.database import init_db
+from handlers.routers import router
+from handlers.database import init_db
 
 load_dotenv()
 BOT_TOKEN = getenv("BOT_TOKEN")

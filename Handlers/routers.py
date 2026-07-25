@@ -2,9 +2,9 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
-from Handlers.Forms.request_send import SendRequest
-import Handlers.keyboards as kb
-from Handlers.database import get_user, add_user, add_request, get_my_requests
+from handlers.Forms.request_send import SendRequest
+import handlers.keyboards as kb
+from handlers.database.database import get_user, add_user, add_request, get_my_requests
 from aiogram.types import ReplyKeyboardRemove
 from os import getenv
 
