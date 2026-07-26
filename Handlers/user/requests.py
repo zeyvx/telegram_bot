@@ -2,15 +2,16 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from states.request_send import SendRequest
-import keyboards.user as kb
+from keyboards import navigation, user
 from database.dao import users_dao
+from services import requests_service as re
 
 router = Router()
 
 @router.callback_query(F.data == 'send_request')
 async def send_request(callback: CallbackQuery, state: FSMContext):
     await state.set_state(SendRequest.category)
-    await callback.message.edit_text("Пожалуйста выберите категорию", reply_markup=kb.problems_keyboard())
+    await callback.message.edit_text("Пожалуйста выберите категорию", reply_markup=user.problems_keyboard())
     await callback.answer()
 
 @router.callback_query(SendRequest.category, F.data.startswith("problem_"))
@@ -41,7 +42,7 @@ async def get_request(message: Message, state: FSMContext):
 
     bot_message = await message.answer(
         "Прикрепите файл или нажмите 'Пропустить'",
-        reply_markup=kb.skip()
+        reply_markup=user.skip()
     )
 
     await state.update_data(file_message_id=bot_message.message_id)
@@ -82,7 +83,7 @@ async def _save_request(message: Message, state: FSMContext):
 
     await message.answer(
         "✅ Заявка успешно отправлена!",
-        reply_markup=kb.main_keyboard()
+        reply_markup=user.main_keyboard()
     )
 
 
@@ -101,7 +102,7 @@ async def skip_file(callback: CallbackQuery, state: FSMContext):
 
     await callback.message.edit_text(
         "✅ Заявка успешно отправлена!",
-        reply_markup=kb.main_keyboard()
+        reply_markup=user.main_keyboard()
     )
 
     await callback.answer()
@@ -115,28 +116,6 @@ async def get_file_invalid(message: Message, state: FSMContext):
 
 #Посмотреть свои заявки
 
-def format_text(request):
-
-    categories = {
-        "tech": "Техническая",
-        "payment": "Оплата",
-        "delivery": "Доставка",
-        "order": "Заказ",
-        "another": "Другое"
-    }
-
-    category = categories.get(
-        request[2],
-        request[2]
-    )
-
-    return (
-        f"📋 Заявка №{request[0]}\n\n"
-        f"📂 Категория: {category}\n"
-        f"📝 Описание:\n{request[3]}\n\n"
-        f"📌 Статус: {request[5]}"
-    )
-
 @router.callback_query(F.data == 'my_requests')
 async def my_requests(callback: CallbackQuery):
 
@@ -147,7 +126,7 @@ async def my_requests(callback: CallbackQuery):
     if not requests:
         await callback.message.edit_text(
             "У вас пока нет заявок",
-            reply_markup=kb.main_keyboard()
+            reply_markup=user.main_keyboard()
         )
 
         await callback.answer()
@@ -158,12 +137,13 @@ async def my_requests(callback: CallbackQuery):
     request = requests[current]
 
     await callback.message.edit_text(
-        text=format_text(request),
-        reply_markup=kb.get_navigation(
+        text=re.format_text(request),
+        reply_markup=navigation.get_navigation(
             current=current,
-            total=len(requests)
+            total=len(requests),
+            prefix='request'
         )
-    )
+    )   
 
     await callback.answer()
 
@@ -172,7 +152,7 @@ async def my_requests(callback: CallbackQuery):
 async def request_page(callback: CallbackQuery):
 
     page = int(
-        int(callback.data.split(":")[1])
+        callback.data.split(":")[1]
     )
 
     user_id = callback.from_user.id
@@ -194,10 +174,11 @@ async def request_page(callback: CallbackQuery):
     request = requests[page]
 
     await callback.message.edit_text(
-        text=format_text(request),
-        reply_markup=kb.get_navigation(
+        text=re.format_text(request),
+        reply_markup=navigation.get_navigation(
             current=page,
-            total=len(requests)
+            total=len(requests),
+            prefix='request'
         )
     )
 
