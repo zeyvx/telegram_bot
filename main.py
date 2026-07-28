@@ -4,11 +4,15 @@ from database.database import init_db
 import aiosqlite
 from config import BOT_TOKEN
 from handlers.user.start import router as start_router
-from handlers.user.requests import router as requests_router
+from handlers.user.requests import router as requests
+from handlers.admin.admins import router as admin
+from handlers.admin.requests import router as admin_request
 
 dp = Dispatcher()
 dp.include_router(start_router)
-dp.include_router(requests_router)
+dp.include_router(requests)
+dp.include_router(admin)
+dp.include_router(admin_request)
 
 async def main():
     async with aiosqlite.connect("database.db") as db:

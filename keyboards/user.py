@@ -30,20 +30,3 @@ def send_contact():
     ], resize_keyboard=True, one_time_keyboard=True)
 
     return keyboard
-
-def get_navigation(current, total):
-    buttons = []
-
-    if current > 0:
-        buttons.append(InlineKeyboardButton(
-            text='⬅️ Пред.',
-            callback_data=f'request_page:{current - 1}'
-        ))
-
-    if current < total - 1:
-        buttons.append(InlineKeyboardButton(
-            text='След. ➡️',
-            callback_data=f'request_page:{current + 1}'
-        ))
-
-    return InlineKeyboardMarkup(inline_keyboard=[buttons])
