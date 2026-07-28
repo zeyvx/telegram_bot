@@ -9,3 +9,12 @@ def start_menu():
     return keyboard
 
 
+def request_actions_keyboard(request_id):
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text='✅ Завершить', callback_data=f'complete_request:{request_id}'),
+        InlineKeyboardButton(text='💬 Ответить', callback_data=f'reply_request:{request_id}')],
+        [InlineKeyboardButton(text='🔄 Вернуть в очередь', callback_data=f'return_request:{request_id}')],
+        [InlineKeyboardButton(text='🔙 Назад', callback_data='my_works')]
+    ])
+
+    return keyboard
