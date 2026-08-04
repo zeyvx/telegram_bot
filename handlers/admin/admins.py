@@ -66,6 +66,7 @@ async def new_request_page(callback: CallbackQuery):
 
     await callback.answer()
 
+
 @router.callback_query(F.data == 'my_works')
 async def my_works(callback: CallbackQuery):
     my_requests = await admins_dao.get_my_admin_requests(callback.from_user.id)
@@ -103,7 +104,7 @@ async def my_works_page(callback: CallbackQuery):
         return
 
     request = my_requests[page]
-
+    
     await callback.message.edit_text(
         text=re.format_text(request),
         reply_markup=navigation.get_navigation(
