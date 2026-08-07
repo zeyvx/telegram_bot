@@ -4,4 +4,4 @@ from dotenv import load_dotenv
 load_dotenv()
 BOT_TOKEN = getenv("BOT_TOKEN")
 OPERATOR_PHONE = getenv("OPERATOR_PHONE")
-ADMINS = [int(getenv("ADMIN_ID"))]
+ADMINS = [int(getenv("ADMIN_IDS"))]

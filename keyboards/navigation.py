@@ -16,6 +16,8 @@ def get_navigation(current, total, prefix, request_id = None):
             callback_data=f'{prefix}_page:{current + 1}'
         ))
 
+    buttons.append(InlineKeyboardButton(text='В меню', callback_data='back_to_menu'))
+
     keyboard = [buttons]
 
     if request_id is not None:

@@ -3,8 +3,10 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from states.request_send import SendRequest
 from keyboards import navigation, user
+from keyboards import admin
 from database.dao import users_dao
-from services import requests_service as re
+from services import requests_service as requests_service
+from config import ADMINS
 
 router = Router()
 
@@ -137,7 +139,7 @@ async def my_requests(callback: CallbackQuery):
     request = requests[current]
 
     await callback.message.edit_text(
-        text=re.format_text(request),
+        text=requests_service.format_text(request),
         reply_markup=navigation.get_navigation(
             current=current,
             total=len(requests),
@@ -174,7 +176,7 @@ async def request_page(callback: CallbackQuery):
     request = requests[page]
 
     await callback.message.edit_text(
-        text=re.format_text(request),
+        text=requests_service.format_text(request),
         reply_markup=navigation.get_navigation(
             current=page,
             total=len(requests),
@@ -182,4 +184,12 @@ async def request_page(callback: CallbackQuery):
         )
     )
 
+    await callback.answer()
+
+@router.callback_query(F.data == 'back_to_menu')
+async def back_to_menu(callback: CallbackQuery):
+    if callback.from_user.id in ADMINS:
+        await callback.message.edit_text(text='Главное меню', reply_markup=admin.start_menu())
+    else:
+        await callback.message.edit_text(text='Главное меню', reply_markup=user.main_keyboard())
     await callback.answer()
