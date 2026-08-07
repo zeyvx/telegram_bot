@@ -76,15 +76,16 @@ async def my_works(callback: CallbackQuery):
         await callback.answer()
         return
 
-    current = 0
+    page_requests = my_requests[:5]
 
-    request = my_requests[current]
+    text = "\n".join(
+        requests_service.format_short(request, i + 1)
+        for i, request in enumerate(page_requests)
+    )
 
     await callback.message.edit_text(
-        text=requests_service.format_text(request),
-        reply_markup=navigation.get_navigation(current=current,
-                                               total=len(my_requests),
-                                               prefix='my_works')
+        text=text,
+        reply_markup=admin.my_works_list_keyboard(page_requests)
     )
 
     await callback.answer()

@@ -1,4 +1,5 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 def start_menu():
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -18,3 +19,12 @@ def request_actions_keyboard(request_id):
     ])
 
     return keyboard
+
+def my_works_list_keyboard(requests):
+    builder = InlineKeyboardBuilder()
+
+    for i, request in enumerate(requests):
+        builder.button(text=str(i + 1), callback_data=f"open_request:{request[0]}")
+
+    builder.adjust(3)
+    return builder.as_markup()
