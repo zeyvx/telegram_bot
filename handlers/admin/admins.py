@@ -2,7 +2,7 @@ from aiogram.types import Message, CallbackQuery
 from aiogram import Router, F
 import database.dao.admins_dao as admins_dao
 from keyboards import navigation, admin
-from services import requests_service as re
+from services import requests_service
 
 router = Router()
 
@@ -20,7 +20,7 @@ async def new_requests(callback: CallbackQuery):
     request = requests[current]
 
     await callback.message.edit_text(
-        text=re.format_text(request),
+        text=requests_service.format_text(request),
         reply_markup=navigation.get_navigation(
             current=current,
             total=len(requests),
@@ -55,7 +55,7 @@ async def new_request_page(callback: CallbackQuery):
     request = requests[page]
 
     await callback.message.edit_text(
-        text=re.format_text(request),
+        text=requests_service.format_text(request),
         reply_markup=navigation.get_navigation(
             current=page,
             total=len(requests),
@@ -72,7 +72,7 @@ async def my_works(callback: CallbackQuery):
     my_requests = await admins_dao.get_my_admin_requests(callback.from_user.id)
 
     if not my_requests:
-        await callback.message.edit_text("У вас пока нет новых заявок")
+        await callback.message.edit_text("У вас пока нет новых заявок", reply_markup=admin.start_menu())
         await callback.answer()
         return
 
@@ -81,7 +81,7 @@ async def my_works(callback: CallbackQuery):
     request = my_requests[current]
 
     await callback.message.edit_text(
-        text=re.format_text(request),
+        text=requests_service.format_text(request),
         reply_markup=navigation.get_navigation(current=current,
                                                total=len(my_requests),
                                                prefix='my_works')
@@ -106,7 +106,7 @@ async def my_works_page(callback: CallbackQuery):
     request = my_requests[page]
     
     await callback.message.edit_text(
-        text=re.format_text(request),
+        text=requests_service.format_text(request),
         reply_markup=navigation.get_navigation(
             current=page,
             total=len(my_requests),

@@ -1,4 +1,5 @@
 import aiosqlite
+import sqlite3
 
 async def add_user(user_id, phone):
     try:
@@ -8,7 +9,7 @@ async def add_user(user_id, phone):
             await conn.commit()
             return True
     
-    except aiosqlite.IntegrityError:
+    except sqlite3.IntegrityError:
         return False
 
 async def get_user(user_id):
