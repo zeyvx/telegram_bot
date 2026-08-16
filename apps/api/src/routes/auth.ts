@@ -1,10 +1,15 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { validateTelegramInitData } from "@community-os/application";
+import { validateTelegramInitData, type SessionService, type UserService } from "@community-os/application";
 
 const bodySchema = z.object({ initData: z.string().min(1).max(8192) });
 
-export async function authRoutes(app: FastifyInstance) {
+export interface TelegramAuthDependencies {
+  users: UserService;
+  sessions: SessionService;
+}
+
+export async function authRoutes(app: FastifyInstance, deps: TelegramAuthDependencies) {
   app.post("/api/v1/auth/telegram", async (request, reply) => {
     const { initData } = bodySchema.parse(request.body);
     const botToken = process.env.BOT_TOKEN;
@@ -14,13 +19,20 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     const telegram = validateTelegramInitData(initData, botToken);
+    const user = await deps.users.syncTelegramUser({
+      telegramId: String(telegram.user.id),
+      username: telegram.user.username,
+      firstName: telegram.user.first_name,
+      lastName: telegram.user.last_name,
+      languageCode: telegram.user.language_code
+    });
+    const session = await deps.sessions.create(user.id);
 
-    // Session issuance is intentionally a separate concern. No client-provided
-    // community or role information is accepted by this endpoint.
     return {
       authenticated: true,
-      telegramUser: telegram.user,
-      authDate: telegram.authDate
+      token: session.token,
+      expiresAt: session.expiresAt,
+      user: { id: user.id, telegramId: user.telegramId }
     };
   });
 }
