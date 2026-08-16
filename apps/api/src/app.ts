@@ -3,21 +3,15 @@ import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import { communityRoutes } from "./routes/communities.js";
 import { memberRoutes } from "./routes/members.js";
+import { roleRoutes } from "./routes/roles.js";
 
 export function buildApp() {
-  const app = Fastify({
-    logger: true,
-    requestIdHeader: "x-request-id",
-    trustProxy: true
-  });
-
+  const app = Fastify({ logger: true, requestIdHeader: "x-request-id", trustProxy: true });
   void app.register(helmet);
-  void app.register(rateLimit, {
-    max: 120,
-    timeWindow: "1 minute"
-  });
+  void app.register(rateLimit, { max: 120, timeWindow: "1 minute" });
   void app.register(communityRoutes);
   void app.register(memberRoutes);
+  void app.register(roleRoutes);
 
   app.get("/health", async () => ({ status: "ok" }));
   app.get("/api/v1/health", async () => ({ status: "ok", version: "v1" }));
@@ -32,6 +26,5 @@ export function buildApp() {
       }
     });
   });
-
   return app;
 }
