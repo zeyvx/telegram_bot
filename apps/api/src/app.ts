@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import { communityRoutes } from "./routes/communities.js";
+import { memberRoutes } from "./routes/members.js";
 
 export function buildApp() {
   const app = Fastify({
@@ -16,6 +17,7 @@ export function buildApp() {
     timeWindow: "1 minute"
   });
   void app.register(communityRoutes);
+  void app.register(memberRoutes);
 
   app.get("/health", async () => ({ status: "ok" }));
   app.get("/api/v1/health", async () => ({ status: "ok", version: "v1" }));
