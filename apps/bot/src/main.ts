@@ -1,12 +1,13 @@
 import { Bot, webhookCallback } from "grammy";
 import { loadConfig } from "@community-os/config";
-import { createAuthorizationRepository, createAuditLogRepository, createCommunityAccessRepository, createDatabase, createMemberRepository, createRoleRepository } from "@community-os/database";
-import { PERMISSIONS, canAssignRole, canDeleteRole, hasPermission } from "@community-os/domain";
+import { createAuthorizationRepository, createAuditLogRepository, createCommunityAccessRepository, createDatabase, createMemberRepository, createModerationRepository, createRoleRepository } from "@community-os/database";
+import { PERMISSIONS, canAssignRole, hasPermission } from "@community-os/domain";
 import Fastify from "fastify";
 import { communityMenuKeyboard, communityPickerKeyboard } from "./ui/community-menu.js";
 import { membersKeyboard, memberActionsKeyboard } from "./ui/members-menu.js";
 import { rolesKeyboard, roleActionsKeyboard } from "./ui/roles-menu.js";
 import { roleAssignConfirmKeyboard, roleAssignMembersKeyboard, roleDeleteConfirmKeyboard } from "./ui/role-confirm.js";
+import { moderationConfirmKeyboard, moderationMenuKeyboard, moderationResultKeyboard } from "./ui/moderation-menu.js";
 import { formatMemberProfile } from "./ui/format.js";
 import { mainMenuText, accessDeniedText } from "./ui/text.js";
 
@@ -18,6 +19,7 @@ const members = createMemberRepository(db);
 const roles = createRoleRepository(db);
 const authorization = createAuthorizationRepository(db);
 const audit = createAuditLogRepository(db);
+const moderation = createModerationRepository(db);
 
 async function loadActor(telegramUserId: string, communityId: string) {
   const user = await db.query.users.findFirst({ where: (u: any, { eq }: any) => eq(u.telegramUserId, telegramUserId) });
@@ -27,6 +29,14 @@ async function loadActor(telegramUserId: string, communityId: string) {
   const permissions = await authorization.getActorPermissions(communityId, user.id);
   const priority = await authorization.getActorHighestRolePriority(communityId, user.id);
   return { userId: user.id, member, permissions, priority };
+}
+
+async function canModerate(actorTelegramId: string, communityId: string, targetUserId: string, permission: any) {
+  const actor = await loadActor(actorTelegramId, communityId);
+  if (!actor || !hasPermission(actor, permission)) return null;
+  const target = await members.find(communityId, targetUserId);
+  if (!target || actor.priority <= await authorization.getActorHighestRolePriority(communityId, target.userId)) return null;
+  return { actor, target };
 }
 
 bot.command("start", async (ctx) => {
@@ -54,6 +64,8 @@ bot.callbackQuery(/^members:open:(.+)$/, async (ctx) => {
   const communityId = ctx.match[1];
   const community = await communities.getForTelegramUser(String(ctx.from.id), communityId);
   if (!community) return void await ctx.answerCallbackQuery({ text: "⛔ Нет доступа", show_alert: true });
+  const actor = await loadActor(String(ctx.from.id), communityId);
+  if (!actor || !hasPermission(actor, PERMISSIONS.VIEW_MEMBERS)) return void await ctx.answerCallbackQuery({ text: accessDeniedText, show_alert: true });
   const result = await members.list(communityId, 1);
   await ctx.answerCallbackQuery();
   await ctx.editMessageText(`👥 Участники\n\n${community.name}\n\nВыберите участника:`, { reply_markup: membersKeyboard(communityId, result.members, 1, result.hasNext) });
@@ -62,8 +74,10 @@ bot.callbackQuery(/^members:open:(.+)$/, async (ctx) => {
 bot.callbackQuery(/^members:page:(.+):([0-9]+)$/, async (ctx) => {
   const communityId = ctx.match[1];
   const page = Number(ctx.match[2]);
+  const actor = await loadActor(String(ctx.from.id), communityId);
+  if (!actor || !hasPermission(actor, PERMISSIONS.VIEW_MEMBERS) || !Number.isInteger(page) || page < 1) return void await ctx.answerCallbackQuery({ text: accessDeniedText, show_alert: true });
   const community = await communities.getForTelegramUser(String(ctx.from.id), communityId);
-  if (!community || !Number.isInteger(page) || page < 1) return void await ctx.answerCallbackQuery({ text: "⛔ Недоступно", show_alert: true });
+  if (!community) return void await ctx.answerCallbackQuery({ text: "⛔ Нет доступа", show_alert: true });
   const result = await members.list(communityId, page);
   await ctx.answerCallbackQuery();
   await ctx.editMessageText(`👥 Участники\n\n${community.name}\n\nВыберите участника:`, { reply_markup: membersKeyboard(communityId, result.members, page, result.hasNext) });
@@ -72,12 +86,76 @@ bot.callbackQuery(/^members:page:(.+):([0-9]+)$/, async (ctx) => {
 bot.callbackQuery(/^member:open:(.+):(.+)$/, async (ctx) => {
   const communityId = ctx.match[1];
   const memberId = ctx.match[2];
-  const community = await communities.getForTelegramUser(String(ctx.from.id), communityId);
-  if (!community) return void await ctx.answerCallbackQuery({ text: "⛔ Нет доступа к этому сообществу", show_alert: true });
+  const actor = await loadActor(String(ctx.from.id), communityId);
+  if (!actor || !hasPermission(actor, PERMISSIONS.VIEW_MEMBERS)) return void await ctx.answerCallbackQuery({ text: accessDeniedText, show_alert: true });
   const member = await members.find(communityId, memberId);
   if (!member) return void await ctx.answerCallbackQuery({ text: "Участник не найден", show_alert: true });
   await ctx.answerCallbackQuery();
   await ctx.editMessageText(formatMemberProfile(member), { reply_markup: memberActionsKeyboard(communityId, memberId) });
+});
+
+bot.callbackQuery(/^moderation:open:(.+)$/, async (ctx) => {
+  const communityId = ctx.match[1];
+  const actor = await loadActor(String(ctx.from.id), communityId);
+  if (!actor || !hasPermission(actor, PERMISSIONS.MANAGE_MEMBERS)) return void await ctx.answerCallbackQuery({ text: accessDeniedText, show_alert: true });
+  const community = await communities.getForTelegramUser(String(ctx.from.id), communityId);
+  if (!community) return void await ctx.answerCallbackQuery({ text: "⛔ Нет доступа", show_alert: true });
+  await ctx.answerCallbackQuery();
+  await ctx.editMessageText(`🛡 Модерация\n\n${community.name}\n\nВыберите участника для управления или откройте журнал действий.`, { reply_markup: moderationMenuKeyboard(communityId) });
+});
+
+for (const [callback, permission, title] of [
+  ["warn", PERMISSIONS.WARN_MEMBERS, "⚠️ Предупредить"],
+  ["mute", PERMISSIONS.MUTE_MEMBERS, "🔇 Ограничить на 1 час"],
+  ["ban", PERMISSIONS.BAN_MEMBERS, "🚫 Заблокировать"],
+  ["unban", PERMISSIONS.BAN_MEMBERS, "↩️ Разблокировать"]
+] as const) {
+  bot.callbackQuery(new RegExp(`^member:${callback}:(.+):(.+)$`), async (ctx) => {
+    const communityId = ctx.match[1];
+    const memberId = ctx.match[2];
+    const checked = await canModerate(String(ctx.from.id), communityId, memberId, permission);
+    if (!checked) return void await ctx.answerCallbackQuery({ text: accessDeniedText, show_alert: true });
+    await ctx.answerCallbackQuery();
+    await ctx.editMessageText(`${title}?\n\nПользователь: ${checked.target.username ? `@${checked.target.username}` : checked.target.displayName}\n\nДействие будет записано в журнал.`, { reply_markup: moderationConfirmKeyboard(callback, communityId, memberId) });
+  });
+}
+
+bot.callbackQuery(/^moderation:execute:(warn|mute|ban|unban):(.+):(.+)$/, async (ctx) => {
+  const action = ctx.match[1];
+  const communityId = ctx.match[2];
+  const memberId = ctx.match[3];
+  const permission = action === "warn" ? PERMISSIONS.WARN_MEMBERS : action === "mute" ? PERMISSIONS.MUTE_MEMBERS : PERMISSIONS.BAN_MEMBERS;
+  const checked = await canModerate(String(ctx.from.id), communityId, memberId, permission);
+  if (!checked) return void await ctx.answerCallbackQuery({ text: accessDeniedText, show_alert: true });
+  const community = await communities.getForTelegramUser(String(ctx.from.id), communityId);
+  if (!community) return void await ctx.answerCallbackQuery({ text: "⛔ Сообщество недоступно", show_alert: true });
+  const telegramUserId = Number(checked.target.telegramUserId);
+  if (!Number.isSafeInteger(telegramUserId)) return void await ctx.answerCallbackQuery({ text: "Не удалось определить Telegram ID", show_alert: true });
+
+  if (action === "warn") {
+    await moderation.warn({ communityId, memberId: checked.target.id, actorUserId: checked.actor.userId });
+  } else if (action === "mute") {
+    await ctx.api.restrictChatMember(community.telegramChatId, telegramUserId, { can_send_messages: false, can_send_audios: false, can_send_documents: false, can_send_photos: false, can_send_videos: false, can_send_video_notes: false, can_send_voice_notes: false, can_send_polls: false, can_send_other_messages: false, can_add_web_page_previews: false }, { until_date: Math.floor(Date.now() / 1000) + 3600 });
+    await moderation.logAction({ communityId, memberId: checked.target.id, actorUserId: checked.actor.userId, action: "MUTE", metadata: { durationSeconds: 3600 } });
+  } else if (action === "ban") {
+    await ctx.api.banChatMember(community.telegramChatId, telegramUserId);
+    await moderation.logAction({ communityId, memberId: checked.target.id, actorUserId: checked.actor.userId, action: "BAN" });
+  } else {
+    await ctx.api.unbanChatMember(community.telegramChatId, telegramUserId, { only_if_banned: true });
+    await moderation.logAction({ communityId, memberId: checked.target.id, actorUserId: checked.actor.userId, action: "UNBAN" });
+  }
+
+  await audit.write({ communityId, actorUserId: checked.actor.userId, targetUserId: checked.target.userId, action: `MODERATION_${action.toUpperCase()}`, metadata: action === "mute" ? { durationSeconds: 3600 } : undefined });
+  await ctx.answerCallbackQuery({ text: "Готово" });
+  await ctx.editMessageText(`✅ ${action === "warn" ? "Предупреждение выдано" : action === "mute" ? "Пользователь ограничен на 1 час" : action === "ban" ? "Пользователь заблокирован" : "Пользователь разблокирован"}.`, { reply_markup: moderationResultKeyboard(communityId, memberId) });
+});
+
+bot.callbackQuery(/^moderation:logs:(.+)$/, async (ctx) => {
+  const communityId = ctx.match[1];
+  const actor = await loadActor(String(ctx.from.id), communityId);
+  if (!actor || !hasPermission(actor, PERMISSIONS.VIEW_LOGS)) return void await ctx.answerCallbackQuery({ text: accessDeniedText, show_alert: true });
+  await ctx.answerCallbackQuery();
+  await ctx.editMessageText("📜 Журнал модерации\n\nДля v1.0 подробная фильтрация будет добавлена в Dashboard.", { reply_markup: moderationMenuKeyboard(communityId) });
 });
 
 bot.callbackQuery(/^roles:open:(.+)$/, async (ctx) => {
@@ -93,7 +171,7 @@ bot.callbackQuery(/^role:open:(.+):(.+)$/, async (ctx) => {
   const communityId = ctx.match[1];
   const roleId = ctx.match[2];
   const community = await communities.getForTelegramUser(String(ctx.from.id), communityId);
-  if (!community) return void await ctx.answerCallbackQuery({ text: "⛔ Нет доступа к этому сообществу", show_alert: true });
+  if (!community) return void await ctx.answerCallbackQuery({ text: "⛔ Нет доступа", show_alert: true });
   const role = await roles.get(communityId, roleId);
   if (!role) return void await ctx.answerCallbackQuery({ text: "Роль не найдена", show_alert: true });
   const permissionsText = role.permissions.length ? role.permissions.map((p: any) => `• ${p.id}`).join("\n") : "• Нет разрешений";
