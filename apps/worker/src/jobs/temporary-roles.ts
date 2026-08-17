@@ -15,13 +15,20 @@ export async function expireTemporaryRoles(db: any, now = new Date()) {
 
   if (!expired.length) return 0;
 
+  let removed = 0;
   await db.transaction(async (tx: any) => {
     for (const item of expired) {
-      await tx.delete(memberRoles).where(and(
-        eq(memberRoles.memberId, item.memberId),
-        eq(memberRoles.roleId, item.roleId),
-        lte(memberRoles.expiresAt, now)
-      ));
+      const deleted = await tx.delete(memberRoles)
+        .where(and(
+          eq(memberRoles.memberId, item.memberId),
+          eq(memberRoles.roleId, item.roleId),
+          lte(memberRoles.expiresAt, now)
+        ))
+        .returning({ memberId: memberRoles.memberId });
+
+      if (!deleted.length) continue;
+      removed += 1;
+
       await tx.insert(auditLogs).values({
         communityId: item.communityId,
         actorUserId: null,
@@ -32,5 +39,5 @@ export async function expireTemporaryRoles(db: any, now = new Date()) {
     }
   });
 
-  return expired.length;
+  return removed;
 }
