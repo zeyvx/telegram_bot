@@ -1,21 +1,23 @@
 import { Bot, webhookCallback } from "grammy";
 import { loadConfig } from "@community-os/config";
-import { createAuthorizationRepository, createCommunityAccessRepository, createDatabase, createMemberRepository, createRoleRepository } from "@community-os/database";
-import { PERMISSIONS, hasPermission, canManageTargetRole } from "@community-os/domain";
+import { createAuthorizationRepository, createAuditLogRepository, createCommunityAccessRepository, createDatabase, createMemberRepository, createRoleRepository } from "@community-os/database";
+import { PERMISSIONS, canAssignRole, canDeleteRole, hasPermission } from "@community-os/domain";
 import Fastify from "fastify";
 import { communityMenuKeyboard, communityPickerKeyboard } from "./ui/community-menu.js";
 import { membersKeyboard, memberActionsKeyboard } from "./ui/members-menu.js";
 import { rolesKeyboard, roleActionsKeyboard } from "./ui/roles-menu.js";
+import { roleAssignConfirmKeyboard, roleAssignMembersKeyboard, roleDeleteConfirmKeyboard } from "./ui/role-confirm.js";
 import { formatMemberProfile } from "./ui/format.js";
 import { mainMenuText, accessDeniedText } from "./ui/text.js";
 
 const config = loadConfig();
 const bot = new Bot(config.TELEGRAM_BOT_TOKEN);
-const { db, client } = createDatabase(config.DATABASE_URL);
+const { db } = createDatabase(config.DATABASE_URL);
 const communities = createCommunityAccessRepository(db);
 const members = createMemberRepository(db);
 const roles = createRoleRepository(db);
 const authorization = createAuthorizationRepository(db);
+const audit = createAuditLogRepository(db);
 
 async function loadActor(telegramUserId: string, communityId: string) {
   const user = await db.query.users.findFirst({ where: (u: any, { eq }: any) => eq(u.telegramUserId, telegramUserId) });
@@ -71,7 +73,7 @@ bot.callbackQuery(/^member:open:(.+):(.+)$/, async (ctx) => {
   const communityId = ctx.match[1];
   const memberId = ctx.match[2];
   const community = await communities.getForTelegramUser(String(ctx.from.id), communityId);
-  if (!community) return void await ctx.answerCallbackQuery({ text: "⛔ Нет доступа", show_alert: true });
+  if (!community) return void await ctx.answerCallbackQuery({ text: "⛔ Нет доступа к этому сообществу", show_alert: true });
   const member = await members.find(communityId, memberId);
   if (!member) return void await ctx.answerCallbackQuery({ text: "Участник не найден", show_alert: true });
   await ctx.answerCallbackQuery();
@@ -91,12 +93,80 @@ bot.callbackQuery(/^role:open:(.+):(.+)$/, async (ctx) => {
   const communityId = ctx.match[1];
   const roleId = ctx.match[2];
   const community = await communities.getForTelegramUser(String(ctx.from.id), communityId);
-  if (!community) return void await ctx.answerCallbackQuery({ text: "⛔ Нет доступа", show_alert: true });
+  if (!community) return void await ctx.answerCallbackQuery({ text: "⛔ Нет доступа к этому сообществу", show_alert: true });
   const role = await roles.get(communityId, roleId);
   if (!role) return void await ctx.answerCallbackQuery({ text: "Роль не найдена", show_alert: true });
   const permissionsText = role.permissions.length ? role.permissions.map((p: any) => `• ${p.id}`).join("\n") : "• Нет разрешений";
   await ctx.answerCallbackQuery();
   await ctx.editMessageText(`🎭 ${role.icon ?? ""} ${role.name}\n\n${role.description ?? "Без описания"}\n\nПриоритет: ${role.priority}\n\nРазрешения:\n${permissionsText}`, { reply_markup: roleActionsKeyboard(communityId, roleId) });
+});
+
+bot.callbackQuery(/^role:create:(.+)$/, async (ctx) => {
+  const communityId = ctx.match[1];
+  const actor = await loadActor(String(ctx.from.id), communityId);
+  if (!actor || !hasPermission(actor, PERMISSIONS.MANAGE_ROLES)) return void await ctx.answerCallbackQuery({ text: accessDeniedText, show_alert: true });
+  await ctx.answerCallbackQuery();
+  await ctx.editMessageText("➕ Создание роли\n\nДля v1.0: /role create Название Приоритет\n\nПриоритет должен быть ниже вашей собственной роли.\n\nПосле создания права роли можно настроить.", { reply_markup: rolesKeyboard(communityId, await roles.list(communityId)) });
+});
+
+bot.callbackQuery(/^role:delete:(.+):(.+)$/, async (ctx) => {
+  const communityId = ctx.match[1];
+  const roleId = ctx.match[2];
+  const actor = await loadActor(String(ctx.from.id), communityId);
+  const role = await roles.get(communityId, roleId);
+  if (!actor || !role || !hasPermission(actor, PERMISSIONS.MANAGE_ROLES) || actor.priority <= role.priority || role.managed) return void await ctx.answerCallbackQuery({ text: accessDeniedText, show_alert: true });
+  await ctx.answerCallbackQuery();
+  await ctx.editMessageText(`⚠️ Удалить роль «${role.name}»?\n\nЭто действие нельзя отменить.`, { reply_markup: roleDeleteConfirmKeyboard(communityId, roleId) });
+});
+
+bot.callbackQuery(/^role:delete:execute:(.+):(.+)$/, async (ctx) => {
+  const communityId = ctx.match[1];
+  const roleId = ctx.match[2];
+  const actor = await loadActor(String(ctx.from.id), communityId);
+  const role = await roles.get(communityId, roleId);
+  if (!actor || !role || !hasPermission(actor, PERMISSIONS.MANAGE_ROLES) || actor.priority <= role.priority || role.managed) return void await ctx.answerCallbackQuery({ text: accessDeniedText, show_alert: true });
+  const deleted = await roles.delete(communityId, roleId);
+  if (!deleted) return void await ctx.answerCallbackQuery({ text: "Роль уже удалена или недоступна", show_alert: true });
+  await audit.write({ communityId, actorUserId: actor.userId, action: "ROLE_DELETED", metadata: { roleId, roleName: role.name } });
+  await ctx.answerCallbackQuery({ text: "Роль удалена" });
+  await ctx.editMessageText("🎭 Роли\n\nРоль удалена.", { reply_markup: rolesKeyboard(communityId, await roles.list(communityId)) });
+});
+
+bot.callbackQuery(/^role:assign:(.+):(.+)$/, async (ctx) => {
+  const communityId = ctx.match[1];
+  const roleId = ctx.match[2];
+  const actor = await loadActor(String(ctx.from.id), communityId);
+  const role = await roles.get(communityId, roleId);
+  if (!actor || !role || !canAssignRole(actor, role)) return void await ctx.answerCallbackQuery({ text: accessDeniedText, show_alert: true });
+  const result = await members.list(communityId, 1, 20);
+  await ctx.answerCallbackQuery();
+  await ctx.editMessageText(`👥 Выдать роль «${role.name}»\n\nВыберите участника:`, { reply_markup: roleAssignMembersKeyboard(communityId, roleId, result.members) });
+});
+
+bot.callbackQuery(/^role:assign:confirm:(.+):(.+):(.+)$/, async (ctx) => {
+  const communityId = ctx.match[1];
+  const roleId = ctx.match[2];
+  const memberId = ctx.match[3];
+  const actor = await loadActor(String(ctx.from.id), communityId);
+  const role = await roles.get(communityId, roleId);
+  const target = await members.find(communityId, memberId);
+  if (!actor || !role || !target || !canAssignRole(actor, role)) return void await ctx.answerCallbackQuery({ text: accessDeniedText, show_alert: true });
+  await ctx.answerCallbackQuery();
+  await ctx.editMessageText(`Выдать «${role.name}» пользователю ${target.username ? `@${target.username}` : target.displayName}?`, { reply_markup: roleAssignConfirmKeyboard(communityId, roleId, memberId) });
+});
+
+bot.callbackQuery(/^role:assign:execute:(.+):(.+):(.+)$/, async (ctx) => {
+  const communityId = ctx.match[1];
+  const roleId = ctx.match[2];
+  const memberId = ctx.match[3];
+  const actor = await loadActor(String(ctx.from.id), communityId);
+  const role = await roles.get(communityId, roleId);
+  const target = await members.find(communityId, memberId);
+  if (!actor || !role || !target || !canAssignRole(actor, role)) return void await ctx.answerCallbackQuery({ text: accessDeniedText, show_alert: true });
+  await roles.assignRole({ communityId, roleId, targetUserId: target.userId, assignedBy: actor.userId, expiresAt: null });
+  await audit.write({ communityId, actorUserId: actor.userId, targetUserId: target.userId, action: "ROLE_ASSIGNED", metadata: { roleId, roleName: role.name } });
+  await ctx.answerCallbackQuery({ text: "Роль выдана" });
+  await ctx.editMessageText(`✅ Роль «${role.name}» выдана.`, { reply_markup: roleActionsKeyboard(communityId, roleId) });
 });
 
 bot.callbackQuery(/^menu:open:(.+)$/, async (ctx) => {
