@@ -7,6 +7,7 @@ export function createMemberRepository(db: any) {
       const rows = await db.select({
         id: communityMembers.id,
         userId: users.id,
+        telegramUserId: users.telegramUserId,
         username: users.username,
         displayName: users.firstName,
         lastName: users.lastName,
